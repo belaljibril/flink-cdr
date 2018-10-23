@@ -114,6 +114,9 @@ public class StreamingJob {
 				new SimpleStringSchema());   // serialization schema
 
 
+		/*
+		 * test github comment
+		 */
 
 
 		//Create DataStream object using "DataStream" API, and add to it a Kafka Consumer by using env.AddSource method
