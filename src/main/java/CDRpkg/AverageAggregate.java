@@ -2,7 +2,8 @@ package CDRpkg;
 
 import org.apache.flink.api.common.functions.AggregateFunction;
 
-public class AverageAggregate implements AggregateFunction<KafkaEvent, KafkaEvent, KafkaEvent> {
+public class AverageAggregate /*implements AggregateFunction<KafkaEvent, KafkaEvent, KafkaEvent>*/ {
+    /*
     @Override
     public KafkaEvent createAccumulator() {
         return new KafkaEvent();
@@ -21,5 +22,5 @@ public class AverageAggregate implements AggregateFunction<KafkaEvent, KafkaEven
     @Override
     public KafkaEvent merge(KafkaEvent a, KafkaEvent b) {
         return new KafkaEvent(a.getWord(), a.getFrequency() + b.getFrequency(), (a.getTimestamp() + b.getTimestamp())/2 ) ;
-    }
+    }*/
 }
