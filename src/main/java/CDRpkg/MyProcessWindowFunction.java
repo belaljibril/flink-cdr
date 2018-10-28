@@ -24,7 +24,13 @@ public class MyProcessWindowFunction extends ProcessWindowFunction<KafkaEvent, K
                     in.getO_cell(),
                     in.getT_cell(),
                     in.getR_flag(),
-                    in.getDuration()
+                    in.getDuration(),
+                    in.getO_long(),
+                    in.getO_lat(),
+                    in.getO_emi(),
+                    in.getT_long(),
+                    in.getT_lat(),
+                    in.getT_emi()
             );
             outEl.add(o);
             el ++;
@@ -41,7 +47,13 @@ public class MyProcessWindowFunction extends ProcessWindowFunction<KafkaEvent, K
                         o2.getO_cell(),
                         o2.getT_cell(),
                         r_flag,
-                        o2.getDuration()
+                        o2.getDuration(),
+                        o2.getO_long(),
+                        o2.getO_lat(),
+                        o2.getO_emi(),
+                        o2.getT_long(),
+                        o2.getT_lat(),
+                        o2.getT_emi()
                 )
             );
 
