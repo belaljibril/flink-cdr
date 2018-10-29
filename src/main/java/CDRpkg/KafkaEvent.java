@@ -18,11 +18,11 @@ package CDRpkg;
  */
 
 /**
- * The event type used in the {@link KafkaRepeatedCalls}.
+ * The event type used in the {@link KafkaDetectRepeatedCallsUnique}.
  *
  * <p>This is a Java POJO, which Flink recognizes and will allow "by-name" field referencing
  * when keying a {@link org.apache.flink.streaming.api.datastream.DataStream} of such a type.
- * For a demonstration of this, see the code in {@link KafkaRepeatedCalls}.
+ * For a demonstration of this, see the code in {@link KafkaDetectRepeatedCallsUnique}.
  */
 public class KafkaEvent {
 

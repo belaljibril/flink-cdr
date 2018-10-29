@@ -78,6 +78,7 @@ public class KafkaUniqueCalls {
 		env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
 		env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+        env.setParallelism(1);
 
 		DataStream<KafkaEvent> input = env
 				.addSource(
@@ -87,7 +88,7 @@ public class KafkaUniqueCalls {
 								parameterTool.getProperties())
 								.assignTimestampsAndWatermarks(new CustomWatermarkExtractor()))
 				.keyBy("timestamp", "a_number", "b_number")
-				.timeWindow(Time.seconds(30))
+				.timeWindow(Time.seconds(20))
 				.apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, TimeWindow>() {
 					@Override
 					public void apply(Tuple tuple, TimeWindow window, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {

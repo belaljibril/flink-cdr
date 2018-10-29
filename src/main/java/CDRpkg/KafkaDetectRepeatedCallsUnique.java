@@ -24,6 +24,7 @@ import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -32,11 +33,14 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
+import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
+import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
 
@@ -55,7 +59,7 @@ import javax.annotation.Nullable;
 
 
 
-public class KafkaRepeatedCalls {
+public class KafkaDetectRepeatedCallsUnique {
 
 
 	public static void main(String[] args) throws Exception {
@@ -76,6 +80,7 @@ public class KafkaRepeatedCalls {
 		env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
 		env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+		env.setParallelism(1);
 
 		DataStream<KafkaEvent> input = env
 				.addSource(
@@ -96,8 +101,17 @@ public class KafkaRepeatedCalls {
 						}
 				);
 
+		DataStream<KafkaEvent> output = input.keyBy("timestamp", "a_number", "b_number")
+				.timeWindow(Time.seconds(30))
+				.apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, TimeWindow>() {
+					@Override
+					public void apply(Tuple tuple, TimeWindow window, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
+						out.collect(input.iterator().next());
+					}
+				});
 
-		input.addSink(
+
+		output.addSink(
 				new FlinkKafkaProducer010<>(
 						parameterTool.getRequired("output-topic"),
 						new KafkaEventSchema(),
