@@ -43,6 +43,12 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
 import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -92,7 +98,7 @@ public class KafkaDetectRepeatedCallsUnique {
 				.process(new FindRepeatedCallsWindowFunction())
 				;
 
-		DataStream<KafkaEvent> output = input.keyBy("timestamp", "a_number", "b_number")
+		DataStream<KafkaEvent> output = input.keyBy("timestamp", "anumber", "bnumber")
 				.timeWindow(Time.seconds(30))
 				.apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, TimeWindow>() {
 					@Override
@@ -157,8 +163,24 @@ public class KafkaDetectRepeatedCallsUnique {
 		@Override
 		public long extractTimestamp(KafkaEvent event, long previousElementTimestamp) {
 			// the inputs are assumed to be of format (message,timestamp)
-			this.currentTimestamp = event.getTimestamp();
-			return event.getTimestamp();
+//            Date date = new Date(event.getTimestamp());
+//            DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+//            formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+//            String dateFormatted = formatter.format(date);
+
+            DateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH);
+            Date numeric_ts = new Date(Long.MIN_VALUE);
+            try {
+                numeric_ts = format.parse(event.getTimestamp());
+            } catch (ParseException e) {}
+
+//            System.out.println("===========================");
+//            System.out.println("String Date: " + event.getTimestamp());
+//            System.out.println("Unixtimestamp: " + numeric_ts.getTime());
+//            System.out.println("===========================");
+
+            this.currentTimestamp = numeric_ts.getTime();
+			return numeric_ts.getTime();
 		}
 
 		@Nullable

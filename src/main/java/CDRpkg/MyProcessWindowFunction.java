@@ -13,7 +13,7 @@ public class MyProcessWindowFunction extends ProcessWindowFunction<KafkaEvent, K
 
     @Override
     public void process(Tuple key, Context context, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) {
-
+/*
         ArrayList<KafkaEvent> castedInput = Lists.newArrayList(input);
         int el_count = castedInput.size();
         int r_flag = (el_count > 1) ? 1 : 0;
@@ -43,6 +43,6 @@ public class MyProcessWindowFunction extends ProcessWindowFunction<KafkaEvent, K
             );
 
         }
-
+*/
     }
 }

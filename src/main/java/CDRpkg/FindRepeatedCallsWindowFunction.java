@@ -19,12 +19,12 @@ public class FindRepeatedCallsWindowFunction extends ProcessAllWindowFunction<Ka
             for (int sub_input_counter = main_input_counter+1; sub_input_counter < castedInput.size(); sub_input_counter++) {
                 KafkaEvent in2 = castedInput.get(sub_input_counter);
                 if(
-                        (in1.getA_number().equals(in2.getA_number()) && in1.getB_number().equals(in2.getB_number())) ||
-                                (in1.getA_number().equals(in2.getB_number()) && in1.getB_number().equals(in2.getA_number()))
+                        (in1.getAnumber().equals(in2.getAnumber()) && in1.getBnumber().equals(in2.getBnumber())) ||
+                                (in1.getAnumber().equals(in2.getBnumber()) && in1.getBnumber().equals(in2.getAnumber()))
                 )
                 {
-                    in1.setR_flag(1);
-                    in2.setR_flag(1);
+                    in1.setRflag(1);
+                    in2.setRflag(1);
 
                     out.collect(in1);
                     out.collect(in2);
