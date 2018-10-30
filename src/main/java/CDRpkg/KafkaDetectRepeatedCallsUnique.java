@@ -163,21 +163,13 @@ public class KafkaDetectRepeatedCallsUnique {
 		@Override
 		public long extractTimestamp(KafkaEvent event, long previousElementTimestamp) {
 			// the inputs are assumed to be of format (message,timestamp)
-//            Date date = new Date(event.getTimestamp());
-//            DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-//            formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
-//            String dateFormatted = formatter.format(date);
 
+            String ts = event.getEsstartstamp();
             DateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH);
             Date numeric_ts = new Date(Long.MIN_VALUE);
             try {
-                numeric_ts = format.parse(event.getTimestamp());
+                numeric_ts = format.parse(ts);
             } catch (ParseException e) {}
-
-//            System.out.println("===========================");
-//            System.out.println("String Date: " + event.getTimestamp());
-//            System.out.println("Unixtimestamp: " + numeric_ts.getTime());
-//            System.out.println("===========================");
 
             this.currentTimestamp = numeric_ts.getTime();
 			return numeric_ts.getTime();
