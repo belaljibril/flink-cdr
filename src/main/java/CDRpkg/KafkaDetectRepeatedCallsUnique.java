@@ -80,7 +80,6 @@ public class KafkaDetectRepeatedCallsUnique {
 		env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
 		env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-		env.setParallelism(1);
 
 		DataStream<KafkaEvent> input = env
 				.addSource(
