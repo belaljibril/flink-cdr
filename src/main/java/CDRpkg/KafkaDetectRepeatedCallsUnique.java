@@ -89,17 +89,9 @@ public class KafkaDetectRepeatedCallsUnique {
 								new KafkaEventSchema(),
 								parameterTool.getProperties())
 								.assignTimestampsAndWatermarks(new CustomWatermarkExtractor()))
-//				.keyBy("a_number", "b_number")
 				.windowAll(SlidingEventTimeWindows.of(Time.seconds(20), Time.seconds(1)))
 				.process(new FindRepeatedCallsWindowFunction())
-				/*.filter(
-						new FilterFunction<KafkaEvent>() {
-							@Override
-							public boolean filter(KafkaEvent value) throws Exception {
-								return (value.getR_flag() == 1);
-							}
-						}
-				)*/;
+				;
 
 		DataStream<KafkaEvent> output = input.keyBy("timestamp", "a_number", "b_number")
 				.timeWindow(Time.seconds(30))

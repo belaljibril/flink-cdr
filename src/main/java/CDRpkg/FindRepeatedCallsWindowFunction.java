@@ -1,68 +1,46 @@
 package CDRpkg;
 
-import org.apache.flink.api.java.tuple.Tuple;
+import avro.shaded.com.google.common.collect.Lists;
 import org.apache.flink.streaming.api.functions.windowing.ProcessAllWindowFunction;
-import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
+import java.util.*;
 
 public class FindRepeatedCallsWindowFunction extends ProcessAllWindowFunction<KafkaEvent, KafkaEvent, TimeWindow> {
 
     @Override
     public void process(Context context, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) {
 
-        ArrayList<KafkaEvent> inputClone = new ArrayList<KafkaEvent>();
-        int clone_i = -1;
-        for (KafkaEvent inClone: input) {
-            clone_i++;
-            System.out.println("=======");
-            System.out.println("Items[" + clone_i + "]:");
-            System.out.println(inClone);
-            System.out.println("=======");
-            inputClone.add(inClone);
-        }
-
-        int el = 0;
-        int r_flag = 0;
-        ArrayList<KafkaEvent> outEl = new ArrayList<KafkaEvent>();
-
-        int main_input_counter = -1;
-        int sub_input_counter = -1;
         ArrayList<Integer> repeated_calls_indicies = new ArrayList<Integer>();
-        //System.out.println("My flink FindRepeatedCallsWindowFunction");
-        for (KafkaEvent in1: input) {
-            main_input_counter++;
-            for (KafkaEvent in2: inputClone) {
-                sub_input_counter++;
-                if(main_input_counter == sub_input_counter) continue;
 
+        ArrayList<KafkaEvent> castedInput = Lists.newArrayList(input);
+
+        for (int main_input_counter = 0; main_input_counter < castedInput.size(); main_input_counter++) {
+            KafkaEvent in1 = castedInput.get(main_input_counter);
+            for (int sub_input_counter = main_input_counter+1; sub_input_counter < castedInput.size(); sub_input_counter++) {
+                KafkaEvent in2 = castedInput.get(sub_input_counter);
                 if(
-                        (in1.getA_number() == in2.getA_number() && in1.getB_number() == in2.getB_number()) ||
-                                (in1.getA_number() == in2.getB_number() && in1.getB_number() == in2.getA_number())
+                        (in1.getA_number().equals(in2.getA_number()) && in1.getB_number().equals(in2.getB_number())) ||
+                                (in1.getA_number().equals(in2.getB_number()) && in1.getB_number().equals(in2.getA_number()))
                 )
                 {
-                    //System.out.println("My flink found repeated index: " + main_input_counter);
                     if(!repeated_calls_indicies.contains(main_input_counter))
                     {
                         repeated_calls_indicies.add(main_input_counter);
-                        System.out.println("=======");
-                        System.out.println("Main counter: " + main_input_counter);
-                        System.out.println("Sub counter: " + sub_input_counter);
-                        System.out.println("My flink found repeated index: " + main_input_counter);
-                        System.out.println("Repeated item1: " + in1);
-                        System.out.println("Repeated item2: " + in2);
-                        System.out.println("=======");
+                    }
+                    if(!repeated_calls_indicies.contains(sub_input_counter))
+                    {
+                        repeated_calls_indicies.add(sub_input_counter);
                     }
                 }
             }
         }
 
-        int repeated_input_counter = 0;
-        for (KafkaEvent in3: input) {
+        Collections.sort(repeated_calls_indicies);
+
+        for (int repeated_input_counter = 0; repeated_input_counter < castedInput.size(); repeated_input_counter++) {
+            KafkaEvent in3 = castedInput.get(repeated_input_counter);
             if(repeated_calls_indicies.contains(repeated_input_counter))
             {
                 KafkaEvent o = new KafkaEvent(
@@ -80,9 +58,9 @@ public class FindRepeatedCallsWindowFunction extends ProcessAllWindowFunction<Ka
                         in3.getT_lat(),
                         in3.getT_emi()
                 );
+
                 out.collect(o);
             }
-            repeated_input_counter++;
         }
     }
 }
