@@ -1,5 +1,6 @@
 package CDRpkg;
 
+import avro.shaded.com.google.common.collect.Lists;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
@@ -13,31 +14,15 @@ public class MyProcessWindowFunction extends ProcessWindowFunction<KafkaEvent, K
     @Override
     public void process(Tuple key, Context context, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) {
 
-        int el = 0;
-        int r_flag = 0;
-        ArrayList<KafkaEvent> outEl = new ArrayList<KafkaEvent>();
-        for (KafkaEvent in: input) {
-            KafkaEvent o = new KafkaEvent(
-                    in.getTimestamp(),
-                    in.getA_number(),
-                    in.getB_number(),
-                    in.getO_cell(),
-                    in.getT_cell(),
-                    in.getR_flag(),
-                    in.getDuration(),
-                    in.getO_long(),
-                    in.getO_lat(),
-                    in.getO_emi(),
-                    in.getT_long(),
-                    in.getT_lat(),
-                    in.getT_emi()
-            );
-            outEl.add(o);
-            el ++;
+        ArrayList<KafkaEvent> castedInput = Lists.newArrayList(input);
+        int el_count = castedInput.size();
+        int r_flag = (el_count > 1) ? 1 : 0;
+        if(r_flag == 0)
+        {
+            return;
         }
-        r_flag = (el > 1) ? 1 : 0;
 
-        for(KafkaEvent o2: outEl)
+        for(KafkaEvent o2: castedInput)
         {
             out.collect(
                 new KafkaEvent(
