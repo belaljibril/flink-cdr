@@ -14,10 +14,17 @@ public class FindRepeatedCallsWindowFunction extends ProcessAllWindowFunction<Ka
 
         ArrayList<KafkaEvent> castedInput = Lists.newArrayList(input);
 
+        System.out.println("==========================");
+        System.out.println("Window calls");
         for (int main_input_counter = 0; main_input_counter < castedInput.size(); main_input_counter++) {
             KafkaEvent in1 = castedInput.get(main_input_counter);
+            System.out.println("Compared call[" + main_input_counter + "]: " + in1);
             for (int sub_input_counter = main_input_counter+1; sub_input_counter < castedInput.size(); sub_input_counter++) {
                 KafkaEvent in2 = castedInput.get(sub_input_counter);
+                System.out.println("==========================");
+                System.out.println("Compared call1: " + in1);
+                System.out.println("Compared call2: " + in2);
+                System.out.println("==========================");
                 if(
                         (in1.getAnumber().equals(in2.getAnumber()) && in1.getBnumber().equals(in2.getBnumber())) ||
                                 (in1.getAnumber().equals(in2.getBnumber()) && in1.getBnumber().equals(in2.getAnumber()))
@@ -28,8 +35,15 @@ public class FindRepeatedCallsWindowFunction extends ProcessAllWindowFunction<Ka
 
                     out.collect(in1);
                     out.collect(in2);
+
+                    System.out.println("==========================");
+                    System.out.println("Repeated call1: " + in1);
+                    System.out.println("Repeated call2: " + in2);
+                    System.out.println("==========================");
                 }
             }
         }
+        System.out.println("==========================");
+
     }
 }

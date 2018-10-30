@@ -98,7 +98,7 @@ public class KafkaDetectRepeatedCallsUnique {
 				.process(new FindRepeatedCallsWindowFunction())
 				;
 
-		DataStream<KafkaEvent> output = input.keyBy("timestamp", "anumber", "bnumber")
+		DataStream<KafkaEvent> output = input.keyBy("esstartstamp", "anumber", "bnumber")
 				.timeWindow(Time.seconds(30))
 				.apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, TimeWindow>() {
 					@Override
@@ -170,6 +170,11 @@ public class KafkaDetectRepeatedCallsUnique {
             try {
                 numeric_ts = format.parse(ts);
             } catch (ParseException e) {}
+
+            System.out.println("==========================");
+            System.out.println("TS string: " + ts);
+            System.out.println("TS unix: " + numeric_ts.getTime());
+            System.out.println("==========================");
 
             this.currentTimestamp = numeric_ts.getTime();
 			return numeric_ts.getTime();
