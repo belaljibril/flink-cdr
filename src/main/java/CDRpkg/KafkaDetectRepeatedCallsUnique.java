@@ -27,6 +27,7 @@ import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -36,6 +37,7 @@ import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrderness
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
@@ -80,12 +82,15 @@ public class KafkaDetectRepeatedCallsUnique {
 			return;
 		}
 
+		int MAX_MEM_STATE_SIZE = 1024 * 1024 * 1024;
+
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.getConfig().disableSysoutLogging();
 		env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
 		env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
 		env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+		env.setStateBackend(new MemoryStateBackend(MAX_MEM_STATE_SIZE));
 
 		DataStream<KafkaEvent> input = env
 				.addSource(
@@ -93,13 +98,15 @@ public class KafkaDetectRepeatedCallsUnique {
 								parameterTool.getRequired("input-topic"),
 								new KafkaEventSchema(),
 								parameterTool.getProperties())
+								.setStartFromEarliest()
 								.assignTimestampsAndWatermarks(new CustomWatermarkExtractor()))
 				.windowAll(SlidingEventTimeWindows.of(Time.seconds(20), Time.seconds(1)))
 				.process(new FindRepeatedCallsWindowFunction())
 				;
 
-		DataStream<KafkaEvent> output = input.keyBy("esstartstamp", "anumber", "bnumber")
-				.timeWindow(Time.seconds(30))
+		DataStream<KafkaEvent> output = input.keyBy("gatewayname", "callserialnumber")
+                .window(TumblingEventTimeWindows.of(Time.seconds(20)))
+				//.timeWindow(Time.seconds(30))
 				.apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, TimeWindow>() {
 					@Override
 					public void apply(Tuple tuple, TimeWindow window, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
@@ -171,10 +178,10 @@ public class KafkaDetectRepeatedCallsUnique {
                 numeric_ts = format.parse(ts);
             } catch (ParseException e) {}
 
-            System.out.println("==========================");
-            System.out.println("TS string: " + ts);
-            System.out.println("TS unix: " + numeric_ts.getTime());
-            System.out.println("==========================");
+//            System.out.println("==========================");
+//            System.out.println("TS string: " + ts);
+//            System.out.println("TS unix: " + numeric_ts.getTime());
+//            System.out.println("==========================");
 
             this.currentTimestamp = numeric_ts.getTime();
 			return numeric_ts.getTime();

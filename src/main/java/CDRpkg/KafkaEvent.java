@@ -123,6 +123,9 @@ public class KafkaEvent {
 
     public static KafkaEvent fromString(String eventStr) {
         String[] split = eventStr.split(",");
+//        System.out.println("============================");
+//        System.out.println("Kafka Message: " + eventStr);
+//        System.out.println("============================");
         return new KafkaEvent(
                 Integer.valueOf(split[0]),
                 split[1],
