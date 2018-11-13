@@ -19,6 +19,7 @@
 
 package CDRpkg;
 
+import avro.shaded.com.google.common.collect.Iterators;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
@@ -36,6 +37,7 @@ import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExt
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
+import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -100,22 +102,24 @@ public class KafkaDetectRepeatedCallsUnique {
 								parameterTool.getProperties())
 								.setStartFromEarliest()
 								.assignTimestampsAndWatermarks(new CustomWatermarkExtractor()))
-				.windowAll(SlidingEventTimeWindows.of(Time.seconds(20), Time.seconds(1)))
-				.process(new FindRepeatedCallsWindowFunction())
+                .keyBy("anumber", "bnumber")
+				.window(EventTimeSessionWindows.withGap(Time.seconds(20)))
+				.apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, TimeWindow>() {
+                    @Override
+                    public void apply(Tuple tuple, TimeWindow window, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
+                        if(Iterators.size(input.iterator()) > 1) {
+                            input.forEach(el -> {
+                                KafkaEvent outEl = KafkaEvent.fromString(el.toString());
+                                outEl.setRflag(1);
+                                out.collect(outEl);
+                            });
+                        }
+                    }
+                })
 				;
 
-		DataStream<KafkaEvent> output = input.keyBy("gatewayname", "callserialnumber")
-                .window(TumblingEventTimeWindows.of(Time.seconds(20)))
-				//.timeWindow(Time.seconds(30))
-				.apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, TimeWindow>() {
-					@Override
-					public void apply(Tuple tuple, TimeWindow window, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
-						out.collect(input.iterator().next());
-					}
-				});
 
-
-		output.addSink(
+        input.addSink(
 				new FlinkKafkaProducer010<>(
 						parameterTool.getRequired("output-topic"),
 						new KafkaEventSchema(),
