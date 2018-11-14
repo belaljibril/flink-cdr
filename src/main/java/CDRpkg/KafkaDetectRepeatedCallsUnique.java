@@ -19,17 +19,11 @@
 
 package CDRpkg;
 
-import avro.shaded.com.google.common.collect.Iterators;
-import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.common.state.ValueState;
-import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
-import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
@@ -37,11 +31,10 @@ import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExt
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
-import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
-import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
-import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
+import org.apache.flink.streaming.api.windowing.assigners.GlobalWindows;
+import org.apache.flink.streaming.api.windowing.evictors.CountEvictor;
+import org.apache.flink.streaming.api.windowing.triggers.CountTrigger;
+import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
 import org.apache.flink.util.Collector;
@@ -50,9 +43,7 @@ import javax.annotation.Nullable;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-import java.util.TimeZone;
+import java.util.*;
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -91,7 +82,8 @@ public class KafkaDetectRepeatedCallsUnique {
 		env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
 		env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
 		env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
-		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+//		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+//        env.setParallelism(1);
 		env.setStateBackend(new MemoryStateBackend(MAX_MEM_STATE_SIZE));
 
 		DataStream<KafkaEvent> input = env
@@ -103,17 +95,75 @@ public class KafkaDetectRepeatedCallsUnique {
 								.setStartFromEarliest()
 								.assignTimestampsAndWatermarks(new CustomWatermarkExtractor()))
                 .keyBy("anumber", "bnumber")
-				.window(EventTimeSessionWindows.withGap(Time.seconds(20)))
-				.apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, TimeWindow>() {
+                .window(GlobalWindows.create())
+                .trigger(CountTrigger.of(2))
+                .evictor(CountEvictor.of(2))
+                .apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, GlobalWindow>() {
                     @Override
-                    public void apply(Tuple tuple, TimeWindow window, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
-                        if(Iterators.size(input.iterator()) > 1) {
-                            input.forEach(el -> {
-                                KafkaEvent outEl = KafkaEvent.fromString(el.toString());
-                                outEl.setRflag(1);
-                                out.collect(outEl);
-                            });
+                    public void apply(Tuple tuple, GlobalWindow window, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
+
+                        KafkaEvent i1 = new KafkaEvent();
+                        KafkaEvent i2 = new KafkaEvent();
+
+                        Iterator<KafkaEvent> it = input.iterator();
+
+                        if(it.hasNext())
+                            i1 = KafkaEvent.fromString(it.next().toString());
+
+                        if(it.hasNext())
+                            i2 = KafkaEvent.fromString(it.next().toString());
+
+
+                        if(
+                                !i1.getCallserialnumber().equals("") &&
+                                !i2.getCallserialnumber().equals("") &&
+                                !i1.getEsstartstamp().equals(i2.getEsstartstamp()) &&
+                                !i1.getEstimestamp().equals(i2.getEstimestamp())
+                        )
+                        {
+
+                            DateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH);
+
+                            String ts1_s = i1.getEsstartstamp();
+                            String ts1_e = i1.getEstimestamp();
+                            String ts2_s = i2.getEsstartstamp();
+                            String ts2_e = i2.getEstimestamp();
+                            Date numeric_ts1_s = new Date(Long.MIN_VALUE);
+                            Date numeric_ts1_e = new Date(Long.MIN_VALUE);
+                            Date numeric_ts2_s = new Date(Long.MIN_VALUE);
+                            Date numeric_ts2_e = new Date(Long.MIN_VALUE);
+                            try {
+                                numeric_ts1_s = format.parse(ts1_s);
+                                numeric_ts1_e = format.parse(ts1_e);
+                                numeric_ts2_s = format.parse(ts2_s);
+                                numeric_ts2_e = format.parse(ts2_e);
+                            } catch (ParseException e) {}
+
+                            long t1_s = numeric_ts1_s.getTime();
+                            long t1_e = numeric_ts1_e.getTime();
+                            long t2_s = numeric_ts2_s.getTime();
+                            long t2_e = numeric_ts2_e.getTime();
+
+                            long diff_ms = t1_s - t2_e;
+                            if(t2_s > t1_s)
+                            {
+                                diff_ms = t2_s - t1_e;
+                            }
+
+                            long diff_s = diff_ms / 1000;
+
+                            boolean is_repeated = (diff_s <= 20);
+
+                            if(is_repeated)
+                            {
+                                input.forEach(el -> {
+                                    KafkaEvent outEl = KafkaEvent.fromString(el.toString());
+                                    outEl.setRflag(1);
+                                    out.collect(outEl);
+                                });
+                            }
                         }
+
                     }
                 })
 				;
@@ -181,11 +231,6 @@ public class KafkaDetectRepeatedCallsUnique {
             try {
                 numeric_ts = format.parse(ts);
             } catch (ParseException e) {}
-
-//            System.out.println("==========================");
-//            System.out.println("TS string: " + ts);
-//            System.out.println("TS unix: " + numeric_ts.getTime());
-//            System.out.println("==========================");
 
             this.currentTimestamp = numeric_ts.getTime();
 			return numeric_ts.getTime();
