@@ -19,22 +19,33 @@
 
 package CDRpkg;
 
+import avro.shaded.com.google.common.collect.Lists;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.typeinfo.TypeHint;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
+import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
+import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.assigners.GlobalWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.evictors.CountEvictor;
+import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.triggers.CountTrigger;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
 import org.apache.flink.util.Collector;
@@ -95,30 +106,48 @@ public class KafkaDetectRepeatedCallsUnique {
 								.setStartFromEarliest()
 								.assignTimestampsAndWatermarks(new CustomWatermarkExtractor()))
                 .keyBy("anumber", "bnumber")
-                .window(GlobalWindows.create())
-                .trigger(CountTrigger.of(2))
-                .evictor(CountEvictor.of(2))
-                .apply(new WindowFunction<KafkaEvent, KafkaEvent, Tuple, GlobalWindow>() {
-                    @Override
-                    public void apply(Tuple tuple, GlobalWindow window, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
+                .countWindow(2,1)
+//                .window(GlobalWindows.create())
+//                .trigger(CountTrigger.of(2))
+//                .evictor(CountEvictor.of(2))
+                .process(new ProcessWindowFunction<KafkaEvent, KafkaEvent, Tuple, GlobalWindow>() {
 
-                        KafkaEvent i1 = new KafkaEvent();
-                        KafkaEvent i2 = new KafkaEvent();
+                    private transient ListState<KafkaEvent> elements;
+
+                    @Override
+                    public void open(Configuration config) {
+                        ListStateDescriptor<KafkaEvent> descriptor =
+                                new ListStateDescriptor<>(
+                                        "collectedElements", // the state name
+                                        TypeInformation.of(new TypeHint<KafkaEvent>() {})
+
+                                ); // default value of the state, if nothing was set
+                        elements = getRuntimeContext().getListState(descriptor);
+                    }
+
+                    @Override
+                    public void process(Tuple tuple, Context context, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
+                        KafkaEvent i1 = null;
+                        KafkaEvent i2 = null;
+
+//                        KafkaEvent a = context.getListState("collectedElements");
 
                         Iterator<KafkaEvent> it = input.iterator();
 
-                        if(it.hasNext())
+                        if(it.hasNext()) {
                             i1 = KafkaEvent.fromString(it.next().toString());
+                        }
 
-                        if(it.hasNext())
+                        if(it.hasNext()) {
                             i2 = KafkaEvent.fromString(it.next().toString());
+                        }
 
 
                         if(
-                                !i1.getCallserialnumber().equals("") &&
-                                !i2.getCallserialnumber().equals("") &&
-                                !i1.getEsstartstamp().equals(i2.getEsstartstamp()) &&
-                                !i1.getEstimestamp().equals(i2.getEstimestamp())
+                            i1 != null &&
+                            i2 != null &&
+                            !i1.getEsstartstamp().equals(i2.getEsstartstamp()) &&
+                            !i1.getEstimestamp().equals(i2.getEstimestamp())
                         )
                         {
 
@@ -156,17 +185,28 @@ public class KafkaDetectRepeatedCallsUnique {
 
                             if(is_repeated)
                             {
+                                ArrayList<KafkaEvent> AllEls = Lists.newArrayList(elements.get());
                                 input.forEach(el -> {
-                                    KafkaEvent outEl = KafkaEvent.fromString(el.toString());
-                                    outEl.setRflag(1);
-                                    out.collect(outEl);
+                                    if(!AllEls.contains(el))
+                                    {
+                                        el.setRflag(1);
+                                        out.collect(el);
+                                        try {
+                                            elements.add(el);
+                                        } catch (Exception e) {
+                                            System.out.println(e);
+                                        }
+                                    }
+//                                    KafkaEvent outEl = KafkaEvent.fromString(el.toString());
+//                                    outEl.setRflag(1);
+//                                    out.collect(outEl);
+//                                    KafkaEvent outEl = KafkaEvent.fromString(el.toString());
                                 });
                             }
                         }
-
                     }
                 })
-				;
+                ;
 
 
         input.addSink(
@@ -225,7 +265,7 @@ public class KafkaDetectRepeatedCallsUnique {
 		public long extractTimestamp(KafkaEvent event, long previousElementTimestamp) {
 			// the inputs are assumed to be of format (message,timestamp)
 
-            String ts = event.getEsstartstamp();
+            String ts = event.getEstimestamp();
             DateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH);
             Date numeric_ts = new Date(Long.MIN_VALUE);
             try {

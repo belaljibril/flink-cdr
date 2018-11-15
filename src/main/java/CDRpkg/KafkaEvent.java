@@ -17,6 +17,8 @@ package CDRpkg;
  * limitations under the License.
  */
 
+import org.apache.flink.table.descriptors.Kafka;
+
 /**
  * The event type used in the {@link KafkaDetectRepeatedCallsUnique}.
  *
@@ -574,5 +576,26 @@ public class KafkaEvent {
 
     public void setDummyendfield(String dummyendfield) {
         this.dummyendfield = dummyendfield;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        // If the object is compared with itself then return true
+        if (o == this) {
+            return true;
+        }
+
+        /* Check if o is an instance of Complex or not
+          "null instanceof [type]" also returns false */
+        if (!(o instanceof KafkaEvent)) {
+            return false;
+        }
+
+        // typecast o to Complex so that we can compare data members
+        KafkaEvent c = (KafkaEvent) o;
+
+        return c.getCallserialnumber().equals(getCallserialnumber())
+                && c.getGatewayname().equals(getGatewayname());
+
     }
 }
