@@ -19,6 +19,13 @@ package CDRpkg;
 
 import org.apache.flink.table.descriptors.Kafka;
 
+import java.io.Serializable;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 /**
  * The event type used in the {@link KafkaDetectRepeatedCallsUnique}.
  *
@@ -26,7 +33,7 @@ import org.apache.flink.table.descriptors.Kafka;
  * when keying a {@link org.apache.flink.streaming.api.datastream.DataStream} of such a type.
  * For a demonstration of this, see the code in {@link KafkaDetectRepeatedCallsUnique}.
  */
-public class KafkaEvent {
+public class KafkaEvent implements Serializable {
 
     private int answeredcallind;
     private String anumber;
@@ -597,5 +604,58 @@ public class KafkaEvent {
         return c.getCallserialnumber().equals(getCallserialnumber())
                 && c.getGatewayname().equals(getGatewayname());
 
+    }
+
+    public static boolean areCallsRepeated(KafkaEvent c1, KafkaEvent c2)
+    {
+        boolean is_repeated = false;
+
+        if(
+                c1 != null &&
+                c2 != null &&
+                !c1.getEsstartstamp().equals(c2.getEsstartstamp()) &&
+                !c1.getEstimestamp().equals(c2.getEstimestamp())
+        )
+        {
+
+            DateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH);
+
+            String ts1_s = c1.getEsstartstamp();
+            String ts1_e = c1.getEstimestamp();
+            String ts2_s = c2.getEsstartstamp();
+            String ts2_e = c2.getEstimestamp();
+            Date numeric_ts1_s = new Date(Long.MIN_VALUE);
+            Date numeric_ts1_e = new Date(Long.MIN_VALUE);
+            Date numeric_ts2_s = new Date(Long.MIN_VALUE);
+            Date numeric_ts2_e = new Date(Long.MIN_VALUE);
+            try {
+                numeric_ts1_s = format.parse(ts1_s);
+                numeric_ts1_e = format.parse(ts1_e);
+                numeric_ts2_s = format.parse(ts2_s);
+                numeric_ts2_e = format.parse(ts2_e);
+            } catch (ParseException e) {}
+
+            long t1_s = numeric_ts1_s.getTime();
+            long t1_e = numeric_ts1_e.getTime();
+            long t2_s = numeric_ts2_s.getTime();
+            long t2_e = numeric_ts2_e.getTime();
+
+            long diff_ms = t1_s - t2_e;
+            if(t2_s > t1_s)
+            {
+                diff_ms = t2_s - t1_e;
+            }
+
+            long diff_s = diff_ms / 1000;
+
+            is_repeated = (diff_s <= 20);
+
+        }
+        return is_repeated;
+    }
+
+    public boolean isNull()
+    {
+        return (this == null || callserialnumber == null || callserialnumber.equals(""));
     }
 }
