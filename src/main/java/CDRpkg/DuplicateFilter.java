@@ -6,7 +6,7 @@ import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Collector;
 
-public class DuplicateFilter extends RichFlatMapFunction<KafkaEvent, KafkaEvent> {
+public class DuplicateFilter extends RichFlatMapFunction<KafkaEventIn, KafkaEventIn> {
     static final ValueStateDescriptor<Boolean> descriptor = new ValueStateDescriptor<>("seen", Boolean.class, false);
     private ValueState<Boolean> operatorState;
 
@@ -16,7 +16,7 @@ public class DuplicateFilter extends RichFlatMapFunction<KafkaEvent, KafkaEvent>
     }
 
     @Override
-    public void flatMap(KafkaEvent value, Collector<KafkaEvent> out) throws Exception {
+    public void flatMap(KafkaEventIn value, Collector<KafkaEventIn> out) throws Exception {
         if (!operatorState.value()) {
             // we haven't seen the element yet
             out.collect(value);

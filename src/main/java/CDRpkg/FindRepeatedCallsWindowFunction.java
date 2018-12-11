@@ -7,20 +7,20 @@ import org.apache.flink.util.Collector;
 
 import java.util.*;
 
-public class FindRepeatedCallsWindowFunction extends ProcessAllWindowFunction<KafkaEvent, KafkaEvent, TimeWindow> {
+public class FindRepeatedCallsWindowFunction extends ProcessAllWindowFunction<KafkaEventIn, KafkaEventIn, TimeWindow> {
 
     @Override
-    public void process(Context context, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) {
+    public void process(Context context, Iterable<KafkaEventIn> input, Collector<KafkaEventIn> out) {
 
-        ArrayList<KafkaEvent> castedInput = Lists.newArrayList(input);
+        ArrayList<KafkaEventIn> castedInput = Lists.newArrayList(input);
 
 //        System.out.println("==========================");
 //        System.out.println("Window calls");
         for (int main_input_counter = 0; main_input_counter < castedInput.size(); main_input_counter++) {
-            KafkaEvent in1 = castedInput.get(main_input_counter);
+            KafkaEventIn in1 = castedInput.get(main_input_counter);
 //            System.out.println("Compared call[" + main_input_counter + "]: " + in1);
             for (int sub_input_counter = main_input_counter+1; sub_input_counter < castedInput.size(); sub_input_counter++) {
-                KafkaEvent in2 = castedInput.get(sub_input_counter);
+                KafkaEventIn in2 = castedInput.get(sub_input_counter);
 //                System.out.println("==========================");
 //                System.out.println("Compared call1: " + in1);
 //                System.out.println("Compared call2: " + in2);
@@ -30,8 +30,8 @@ public class FindRepeatedCallsWindowFunction extends ProcessAllWindowFunction<Ka
                                 (in1.getAnumber().equals(in2.getBnumber()) && in1.getBnumber().equals(in2.getAnumber()))
                 )
                 {
-                    in1.setRflag(1);
-                    in2.setRflag(1);
+//                    in1.setRflag(1);
+//                    in2.setRflag(1);
 
                     out.collect(in1);
                     out.collect(in2);

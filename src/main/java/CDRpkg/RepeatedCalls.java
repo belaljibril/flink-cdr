@@ -19,8 +19,6 @@
 
 package CDRpkg;
 
-import avro.shaded.com.google.common.collect.Lists;
-import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.*;
@@ -34,28 +32,18 @@ import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
+import org.apache.flink.streaming.api.functions.AssignerWithPunctuatedWatermarks;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
-import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
-import org.apache.flink.streaming.api.windowing.assigners.GlobalWindows;
-import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
-import org.apache.flink.streaming.api.windowing.evictors.CountEvictor;
-import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.api.windowing.triggers.CountTrigger;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
-import org.apache.flink.table.descriptors.Kafka;
 import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.Iterator;
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -72,7 +60,7 @@ import java.util.*;
 
 
 
-public class KafkaDetectRepeatedCallsUnique {
+public class RepeatedCalls {
 
 
 	public static void main(String[] args) throws Exception {
@@ -87,142 +75,110 @@ public class KafkaDetectRepeatedCallsUnique {
 			return;
 		}
 
-		int MAX_MEM_STATE_SIZE = 1 * 1024 * 1024 * 1024;
+		int MAX_MEM_STATE_SIZE = Integer.MAX_VALUE; //_MAX 4 * 1024 * 1024 * 1024;
 
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.getConfig().disableSysoutLogging();
 		env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
-		env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
+		env.enableCheckpointing(60000); // create a checkpoint every 5 seconds
 		env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
 //		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+		env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
 //        env.setParallelism(1);
 		env.setStateBackend(new MemoryStateBackend(MAX_MEM_STATE_SIZE));
 
-        DataStream<KafkaEvent> input = env
+        DataStream<KafkaEventOut> input = env
 				.addSource(
 						new FlinkKafkaConsumer010<>(
 								parameterTool.getRequired("input-topic"),
-								new KafkaEventSchema(),
+								new KafkaEventSchemaIn(),
 								parameterTool.getProperties())
-								.setStartFromEarliest()
-								.assignTimestampsAndWatermarks(new CustomWatermarkExtractor()))
+                .setStartFromEarliest()
+//				.assignTimestampsAndWatermarks(new CustomWatermarkExtractor())
+                )
+
                 .keyBy("anumber", "bnumber")
                 .countWindow(1,1)
-//                .window(GlobalWindows.create())
-//                .trigger(CountTrigger.of(2))
-//                .evictor(CountEvictor.of(2))
-                .process(new ProcessWindowFunction<KafkaEvent, KafkaEvent, Tuple, GlobalWindow>() {
+                .process(new ProcessWindowFunction<KafkaEventIn, KafkaEventOut, Tuple, GlobalWindow>() {
 
-                    private transient ListState<KafkaEvent> elements;
 
-                    private transient ValueState<KafkaEvent> historyElement;
+                    private transient ValueState<KafkaEventIn> historyElement;
 
                     @Override
                     public void open(Configuration config) {
 
                         StateTtlConfig ttlConfig = StateTtlConfig
-                                .newBuilder(org.apache.flink.api.common.time.Time.seconds(5))
+                                .newBuilder(org.apache.flink.api.common.time.Time.seconds(30))
                                 .setUpdateType(StateTtlConfig.UpdateType.OnCreateAndWrite)
                                 .setStateVisibility(StateTtlConfig.StateVisibility.NeverReturnExpired)
                                 .cleanupFullSnapshot()
                                 .build();
 
 
-                        ListStateDescriptor<KafkaEvent> listDescriptor =
-                                new ListStateDescriptor<>(
-                                        "collectedElements", // the state name
-                                        TypeInformation.of(new TypeHint<KafkaEvent>() {})
-
-                                );
-
-                        ValueStateDescriptor<KafkaEvent> valueDescriptor =
+                        ValueStateDescriptor<KafkaEventIn> valueDescriptor =
                                 new ValueStateDescriptor<>(
                                         "historyElement", // the state name
-                                        TypeInformation.of(new TypeHint<KafkaEvent>() {})
+                                        TypeInformation.of(new TypeHint<KafkaEventIn>() {})
                                 );
 
-                        listDescriptor.enableTimeToLive(ttlConfig);
                         valueDescriptor.enableTimeToLive(ttlConfig);
 
-                        elements = getRuntimeContext().getListState(listDescriptor);
                         historyElement = getRuntimeContext().getState(valueDescriptor);
                     }
 
                     @Override
-                    public void process(Tuple tuple, Context context, Iterable<KafkaEvent> input, Collector<KafkaEvent> out) throws Exception {
-                        KafkaEvent iWindow = null;
-                        KafkaEvent iHistory = null;
+                    public void process(Tuple tuple, Context context, Iterable<KafkaEventIn> input, Collector<KafkaEventOut> out) throws Exception {
+                        KafkaEventIn iWindow = null;
+                        KafkaEventIn iHistory = null;
+						KafkaEventOut iOutput = null;
 
-                        Iterator<KafkaEvent> it = input.iterator();
+                        Iterator<KafkaEventIn> it = input.iterator();
 
                         if(it.hasNext()) {
-                            iWindow = KafkaEvent.fromString(it.next().toString());
+                            iWindow = KafkaEventIn.fromString(it.next().toString());
+                            iOutput = new KafkaEventOut(iWindow);
                         }
+
+//                        if(!iWindow.filter()) return;
 
                         if(historyElement.value() != null)
                         {
                             iHistory = historyElement.value();
                         }
 
-//                        ArrayList<KafkaEvent> AllEls = Lists.newArrayList(elements.get());
 
-
-//                        if(it.hasNext()) {
-//                            i2 = KafkaEvent.fromString(it.next().toString());
-//                        }
-
-                        boolean is_repeated = KafkaEvent.areCallsRepeated(iWindow, iHistory);
+                        boolean is_repeated = KafkaEventIn.areCallsRepeated(iWindow, iHistory);
                         if(is_repeated)
                         {
-                            iWindow.setRflag(1);
-//                            iHistory.setRflag(1);
+							iOutput.setRflag(1);
                         }
+                        out.collect(iOutput);
 
-                        out.collect(iWindow);
                         historyElement.update(iWindow);
-
-
-                        /*if(i1 != null && !i1.isNull())
-                        {
-                            elements.add(i1);
-                        }*/
-//                        if(i2 != null && !i2.isNull() && !AllEls.contains(i2))
-//                        {
-//                            out.collect(i2);
-//                        }
-                        // TODO: check if previously i2 was repeated
-                        // Then set rflag = 1 from history
-                        /*if(i2 != null && !i2.isNull() && !AllEls.contains(i2))
-                        {
-                            out.collect(i2);
-                        }*/
-
                     }
-                })
-                ;
-
+                });
 
         input.addSink(
 				new FlinkKafkaProducer010<>(
 						parameterTool.getRequired("output-topic"),
-						new KafkaEventSchema(),
+						new KafkaEventSchemaOut(),
 						parameterTool.getProperties()));
 
-		env.execute("Kafka 0.10 Example");
+		env.execute("Repeated-Calls");
 	}
 
 	/**
 	 * A {@link RichMapFunction} that continuously outputs the current total frequency count of a key.
 	 * The current total count is keyed state managed by Flink.
 	 */
-	/*private static class RollingAdditionMapper extends RichMapFunction<KafkaEvent, KafkaEvent> {
+	/*private static class RollingAdditionMapper extends RichMapFunction<KafkaEventIn, KafkaEventIn> {
 
 		private static final long serialVersionUID = 1180234853172462378L;
 
 		private transient ValueState<Integer> currentTotalCount;
 
 		@Override
-		public KafkaEvent map(KafkaEvent event) throws Exception {
+		public KafkaEventIn map(KafkaEventIn event) throws Exception {
 			Integer totalCount = currentTotalCount.value();
 
 			if (totalCount == null) {
@@ -232,7 +188,7 @@ public class KafkaDetectRepeatedCallsUnique {
 
 			currentTotalCount.update(totalCount);
 
-			return new KafkaEvent(event.getWord(), totalCount, event.getTimestamp());
+			return new KafkaEventIn(event.getWord(), totalCount, event.getTimestamp());
 		}
 
 		@Override
@@ -248,33 +204,52 @@ public class KafkaDetectRepeatedCallsUnique {
 	 * <p>Flink also ships some built-in convenience assigners, such as the
 	 * {@link BoundedOutOfOrdernessTimestampExtractor} and {@link AscendingTimestampExtractor}
 	 */
-	private static class CustomWatermarkExtractor implements AssignerWithPeriodicWatermarks<KafkaEvent> {
+	private static class CustomWatermarkExtractorOriginal implements AssignerWithPunctuatedWatermarks<KafkaEventIn> {
 
-		private static final long serialVersionUID = -742759155861320823L;
-
-		private long currentTimestamp = Long.MIN_VALUE;
+		private static final long serialVersionUID = -742759155861320820L;
 
 		@Override
-		public long extractTimestamp(KafkaEvent event, long previousElementTimestamp) {
-			// the inputs are assumed to be of format (message,timestamp)
-
-            String ts = event.getEstimestamp();
-            DateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH);
-            Date numeric_ts = new Date(Long.MIN_VALUE);
-            try {
-                numeric_ts = format.parse(ts);
-            } catch (ParseException e) {}
-
-            this.currentTimestamp = numeric_ts.getTime();
-			return numeric_ts.getTime();
+		public long extractTimestamp(KafkaEventIn event, long previousElementTimestamp) {
+			return event.getUnixtimestamp();
 		}
 
+		/*
 		@Nullable
 		@Override
 		public Watermark getCurrentWatermark() {
 			return new Watermark(currentTimestamp == Long.MIN_VALUE ? Long.MIN_VALUE : currentTimestamp - 1);
 		}
+		*/
+
+		@Nullable
+		@Override
+		public Watermark checkAndGetNextWatermark(KafkaEventIn lastElement, long extractedTimestamp) {
+			return new Watermark(extractedTimestamp - 300000);
+		}
 	}
 
+	private static class CustomWatermarkExtractor implements AssignerWithPeriodicWatermarks<KafkaEventIn> {
+
+		private static final long serialVersionUID = -742759155861320822L;
+
+		private final long maxOutOfOrderness = 5000; // 5 seconds
+
+		private long currentMaxTimestamp;
+
+
+		@Override
+		public long extractTimestamp(KafkaEventIn element, long previousElementTimestamp) {
+			long timestamp = element.getUnixtimestamp();
+			currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp);
+			return timestamp;
+		}
+
+		@Override
+		public Watermark getCurrentWatermark() {
+			// return the watermark as current highest timestamp minus the out-of-orderness bound
+			return new Watermark(currentMaxTimestamp - maxOutOfOrderness);
+		}
+
+	}
 
 }

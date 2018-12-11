@@ -17,8 +17,6 @@ package CDRpkg;
  * limitations under the License.
  */
 
-import org.apache.flink.table.descriptors.Kafka;
-
 import java.io.Serializable;
 import java.text.DateFormat;
 import java.text.ParseException;
@@ -27,13 +25,13 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * The event type used in the {@link KafkaDetectRepeatedCallsUnique}.
+ * The event type used in the {@link SortCalls}.
  *
  * <p>This is a Java POJO, which Flink recognizes and will allow "by-name" field referencing
  * when keying a {@link org.apache.flink.streaming.api.datastream.DataStream} of such a type.
- * For a demonstration of this, see the code in {@link KafkaDetectRepeatedCallsUnique}.
+ * For a demonstration of this, see the code in {@link SortCalls}.
  */
-public class KafkaEvent implements Serializable {
+public class KafkaEventOut implements Serializable, Comparable<KafkaEventOut> {
 
     private int answeredcallind;
     private String anumber;
@@ -80,10 +78,74 @@ public class KafkaEvent implements Serializable {
     private int rflag;
     private String dummyendfield;
 
-    public KafkaEvent() {
+    public long unixtimestamp;
+
+    public void updateUnixtimestamp()
+    {
+        if(this != null && !estimestamp.equals(""))
+        {
+            String ts = getEstimestamp();
+            DateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH);
+            Date numeric_ts = new Date(Long.MIN_VALUE);
+            try {
+                numeric_ts = format.parse(ts);
+            } catch (ParseException e) {}
+
+            unixtimestamp = numeric_ts.getTime();
+        }
     }
 
-    public KafkaEvent(int answeredcallind, String anumber, String bnumber, long callduration, String callserialnumber, long callsetupduration, String chargingcase, String chargingcasedesc, String destcountrycode, String destcountrygeohash, String destcountryname, String destcountryshortname, String destregion, String egresscarriername, String egresstrunkname, String egresstrunktype, String gatewayname, String ingresscarriername, String ingresstrunkname, String ingresstrunktype, String manumber, String mbnumber, String mnpcalldesc, String mnpcallid, String netoperatorcat, String netoperatorname, String netoperatorprefix, int releasecause, String releasecausedesc, int releaseparty, String releasepartydesc, int successfulcallind, String terminationcode, String timestamp, String trunkgroupin, String trunkgroupout, String callresult, String estimestamp, int callattemptind, String startstamp, String esstartstamp, String endstamp, int rflag, String dummyendfield) {
+    public KafkaEventOut() {
+    }
+
+    public KafkaEventOut(KafkaEventIn iIn) {
+        this( iIn.getAnsweredcallind(),
+                iIn.getAnumber(),
+                iIn.getBnumber(),
+                iIn.getCallduration(),
+                iIn.getCallserialnumber(),
+                iIn.getCallsetupduration(),
+                iIn.getChargingcase(),
+                iIn.getChargingcasedesc(),
+                iIn.getDestcountrycode(),
+                iIn.getDestcountrygeohash(),
+                iIn.getDestcountryname(),
+                iIn.getDestcountryshortname(),
+                iIn.getDestregion(),
+                iIn.getEgresscarriername(),
+                iIn.getEgresstrunkname(),
+                iIn.getEgresstrunktype(),
+                iIn.getGatewayname(),
+                iIn.getIngresscarriername(),
+                iIn.getIngresstrunkname(),
+                iIn.getIngresstrunktype(),
+                iIn.getManumber(),
+                iIn.getMbnumber(),
+                iIn.getMnpcalldesc(),
+                iIn.getMnpcallid(),
+                iIn.getNetoperatorcat(),
+                iIn.getNetoperatorname(),
+                iIn.getNetoperatorprefix(),
+                iIn.getReleasecause(),
+                iIn.getReleasecausedesc(),
+                iIn.getReleaseparty(),
+                iIn.getReleasepartydesc(),
+                iIn.getSuccessfulcallind(),
+                iIn.getTerminationcode(),
+                iIn.getTimestamp(),
+                iIn.getTrunkgroupin(),
+                iIn.getTrunkgroupout(),
+                iIn.getCallresult(),
+                iIn.getEstimestamp(),
+                iIn.getCallattemptind(),
+                iIn.getStartstamp(),
+                iIn.getEsstartstamp(),
+                iIn.getEndstamp(),
+                0,
+                iIn.getDummyendfield());
+    }
+
+    public KafkaEventOut(int answeredcallind, String anumber, String bnumber, long callduration, String callserialnumber, long callsetupduration, String chargingcase, String chargingcasedesc, String destcountrycode, String destcountrygeohash, String destcountryname, String destcountryshortname, String destregion, String egresscarriername, String egresstrunkname, String egresstrunktype, String gatewayname, String ingresscarriername, String ingresstrunkname, String ingresstrunktype, String manumber, String mbnumber, String mnpcalldesc, String mnpcallid, String netoperatorcat, String netoperatorname, String netoperatorprefix, int releasecause, String releasecausedesc, int releaseparty, String releasepartydesc, int successfulcallind, String terminationcode, String timestamp, String trunkgroupin, String trunkgroupout, String callresult, String estimestamp, int callattemptind, String startstamp, String esstartstamp, String endstamp, int rflag, String dummyendfield) {
         this.answeredcallind = answeredcallind;
         this.anumber = anumber;
         this.bnumber = bnumber;
@@ -128,14 +190,15 @@ public class KafkaEvent implements Serializable {
         this.endstamp = endstamp;
         this.rflag = rflag;
         this.dummyendfield = dummyendfield;
+        updateUnixtimestamp();
     }
 
-    public static KafkaEvent fromString(String eventStr) {
+    public static KafkaEventOut fromString(String eventStr) {
         String[] split = eventStr.split(",");
 //        System.out.println("============================");
 //        System.out.println("Kafka Message: " + eventStr);
 //        System.out.println("============================");
-        return new KafkaEvent(
+        return new KafkaEventOut(
                 Integer.valueOf(split[0]),
                 split[1],
                 split[2],
@@ -585,6 +648,14 @@ public class KafkaEvent implements Serializable {
         this.dummyendfield = dummyendfield;
     }
 
+    public long getUnixtimestamp() {
+        return unixtimestamp;
+    }
+
+    public void setUnixtimestamp(long unixtimestamp) {
+        this.unixtimestamp = unixtimestamp;
+    }
+
     @Override
     public boolean equals(Object o) {
         // If the object is compared with itself then return true
@@ -594,21 +665,24 @@ public class KafkaEvent implements Serializable {
 
         /* Check if o is an instance of Complex or not
           "null instanceof [type]" also returns false */
-        if (!(o instanceof KafkaEvent)) {
+        if (!(o instanceof KafkaEventOut)) {
             return false;
         }
 
         // typecast o to Complex so that we can compare data members
-        KafkaEvent c = (KafkaEvent) o;
+        KafkaEventOut c = (KafkaEventOut) o;
 
         return c.getCallserialnumber().equals(getCallserialnumber())
                 && c.getGatewayname().equals(getGatewayname());
 
     }
 
-    public static boolean areCallsRepeated(KafkaEvent c1, KafkaEvent c2)
+    public static boolean areCallsRepeated(KafkaEventOut c1, KafkaEventOut c2)
     {
         boolean is_repeated = false;
+
+//        System.out.println("Comparing two events");
+//        System.out.println("e1: " + c1 + " |||| " + " e2: " + c2);
 
         if(
                 c1 != null &&
@@ -658,4 +732,14 @@ public class KafkaEvent implements Serializable {
     {
         return (this == null || callserialnumber == null || callserialnumber.equals(""));
     }
+
+    public boolean filter()
+    {
+        return (this != null && getAnumber().contains("97336194429") && getBnumber().contains("00917743950849"));
+    }
+
+    public int compareTo(KafkaEventOut other) {
+        return Long.compare(this.getUnixtimestamp(), other.getUnixtimestamp());
+    }
+
 }

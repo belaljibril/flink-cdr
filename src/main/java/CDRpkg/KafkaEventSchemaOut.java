@@ -24,30 +24,30 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import java.io.IOException;
 
 /**
- * The serialization schema for the {@link KafkaEvent} type. This class defines how to transform a
- * Kafka record's bytes to a {@link KafkaEvent}, and vice-versa.
+ * The serialization schema for the {@link KafkaEventOut} type. This class defines how to transform a
+ * Kafka record's bytes to a {@link KafkaEventOut}, and vice-versa.
  */
-public class KafkaEventSchema implements DeserializationSchema<KafkaEvent>, SerializationSchema<KafkaEvent> {
+public class KafkaEventSchemaOut implements DeserializationSchema<KafkaEventOut>, SerializationSchema<KafkaEventOut> {
 
     private static final long serialVersionUID = 6154188370181669758L;
 
     @Override
-    public byte[] serialize(KafkaEvent event) {
+    public byte[] serialize(KafkaEventOut event) {
         return event.toString().getBytes();
     }
 
     @Override
-    public KafkaEvent deserialize(byte[] message) throws IOException {
-        return KafkaEvent.fromString(new String(message));
+    public KafkaEventOut deserialize(byte[] message) throws IOException {
+        return KafkaEventOut.fromString(new String(message));
     }
 
     @Override
-    public boolean isEndOfStream(KafkaEvent nextElement) {
+    public boolean isEndOfStream(KafkaEventOut nextElement) {
         return false;
     }
 
     @Override
-    public TypeInformation<KafkaEvent> getProducedType() {
-        return TypeInformation.of(KafkaEvent.class);
+    public TypeInformation<KafkaEventOut> getProducedType() {
+        return TypeInformation.of(KafkaEventOut.class);
     }
 }
