@@ -80,7 +80,7 @@ public class RepeatedCalls {
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.getConfig().disableSysoutLogging();
 		env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
-		env.enableCheckpointing(60000); // create a checkpoint every 5 seconds
+//		env.enableCheckpointing(60000); // create a checkpoint every 5 seconds
 		env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
 //		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 		env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
